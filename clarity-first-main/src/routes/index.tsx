@@ -1,13 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Activity, AlertOctagon, CalendarDays, Gauge, ShieldCheck, Sparkles, UserCheck, Users, TriangleAlert, Bell } from "lucide-react";
+import { Activity, AlertOctagon, CalendarDays, Gauge, ShieldCheck, Sparkles, UserCheck, Users, TriangleAlert, Bell, Flag } from "lucide-react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend as RLegend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { snapshotQuery } from "@/services/api";
-import { projects, workItems } from "@/services/capacity";
-import { filterPeople, useAppState } from "@/components/app/app-state";
+import { useSnapshot } from "@/services/api";
+import { countsForCapacity } from "@/data/agile";
+import { filterPeople, itemMatches, useAppState } from "@/components/app/app-state";
+import { WorkItemTypeBadge } from "@/components/app/WorkItemTypeBadge";
 import { EmptyState, KpiCard, PageHeader, PageSkeleton, Panel } from "@/components/app/ui-bits";
 import { AlertCard } from "@/components/app/AlertCard";
 
@@ -30,12 +30,13 @@ const tooltipStyle = { background: "var(--color-popover)", border: "1px solid va
 const statusColor = { available: "var(--color-status-available-foreground)", healthy: "var(--color-status-healthy)", attention: "var(--color-status-attention)", overload: "var(--color-status-overload)", absent: "var(--color-muted)", conflict: "var(--color-status-overload)" };
 
 function Dashboard() {
-  const { data, isLoading } = useQuery(snapshotQuery);
+  const { data, isLoading } = useSnapshot();
   const { filters, alertStatus } = useAppState();
   if (isLoading || !data) return <PageSkeleton />;
 
   const cfg = data.config;
-  const list = filterPeople(data.people, filters);
+  const { projects, workItems } = data;
+  const list = filterPeople(data.people, filters, workItems);
   const nWeeks = Number(filters.period);
   const withCap = list.filter((p) => p.current.capacity > 0);
   const avgUtil = withCap.length ? withCap.reduce((s, p) => s + p.current.load, 0) / withCap.reduce((s, p) => s + p.current.capacity, 0) : 0;
@@ -54,7 +55,7 @@ function Dashboard() {
     return { week: format(parseISO(w), "dd/MM"), util: cap ? Math.round((load / cap) * 100) : 0 };
   });
   const ids = new Set(list.map((p) => p.person.id));
-  const open = workItems.filter((w) => w.state !== "Concluído" && (!w.assigneeId || ids.has(w.assigneeId)) && (filters.sprint === "all" || w.sprintId === filters.sprint));
+  const open = workItems.filter((w) => w.state !== "Concluído" && countsForCapacity(w) && (!w.assigneeId || ids.has(w.assigneeId)) && itemMatches(w, filters));
   const byProject = projects
     .filter((p) => filters.project === "all" || p.id === filters.project)
     .map((p) => ({ name: p.name, value: open.filter((w) => w.projectId === p.id).reduce((s, w) => s + (w.estimateHours ?? 0), 0), color: `var(${p.colorVar})` }))
@@ -65,7 +66,7 @@ function Dashboard() {
     .filter((p) => filters.project === "all" || p.id === filters.project)
     .map((p) => {
       const row: Record<string, string | number> = { name: p.code };
-      states.forEach((s) => (row[s] = workItems.filter((w) => w.projectId === p.id && w.state === s && (filters.sprint === "all" || w.sprintId === filters.sprint)).length));
+      states.forEach((s) => (row[s] = workItems.filter((w) => w.projectId === p.id && w.state === s && itemMatches(w, filters)).length));
       return row;
     });
 
@@ -76,7 +77,7 @@ function Dashboard() {
       <section className="brand-gradient rounded-2xl p-5 text-primary-foreground shadow-card">
         <h2 className="title-caps mb-3 flex items-center gap-2 text-sm">
           <Sparkles className="size-4" aria-hidden /> Briefing do dia
-          <span className="rounded-full bg-primary-foreground/15 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal">gerado por IA</span>
+          <span className="rounded-full bg-primary-foreground/15 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal">calculado a partir do board</span>
         </h2>
         <ul className="grid gap-2 text-sm md:grid-cols-2">
           {data.briefing.map((b, i) => (
@@ -164,6 +165,29 @@ function Dashboard() {
         </Panel>
       </div>
 
+      <Panel title="Epics e Features" icon={Flag} actions={<span className="text-xs text-muted-foreground">progresso pelas Tasks e Bugs filhos</span>}>
+        {data.roadmap.length === 0 ? (
+          <EmptyState title="Nenhum Epic ou Feature nos dados" text="No Azure DevOps (processo Agile), crie Epics e Features e ligue as User Stories e Tasks a eles." />
+        ) : (
+          <ul className="grid gap-3 md:grid-cols-2">
+            {data.roadmap.slice(0, 8).map((r) => (
+              <li key={r.id} className="rounded-xl border border-border p-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <WorkItemTypeBadge type={r.type} />
+                  <span>#{r.id} · {r.state}</span>
+                  <span className="ml-auto font-bold text-foreground">{Math.round(r.progress * 100)}%</span>
+                </div>
+                <p className="mt-1 truncate text-sm font-medium text-foreground">{r.title}</p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(r.progress * 100)} aria-valuemin={0} aria-valuemax={100}>
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${r.progress * 100}%` }} />
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">{r.done} de {r.total} itens concluídos</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
       <div className="grid gap-6 xl:grid-cols-3">
         <Panel title="Work items por estado" icon={Activity}>
           <ResponsiveContainer width="100%" height={240}>
@@ -179,7 +203,7 @@ function Dashboard() {
         </Panel>
 
         <Panel
-          title="Burndown · Sprint 26"
+          title={`Burndown · ${data.sprintName}`}
           icon={TriangleAlert}
           actions={data.sprintAtRisk && <span className="rounded-full bg-critical-soft px-2 py-0.5 text-[11px] font-bold uppercase text-critical">Em risco</span>}
         >

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { snapshotQuery } from "@/services/api";
+import { useSnapshot } from "@/services/api";
 import type { AlertType, Severity } from "@/services/capacity";
 import { useAppState, type AlertStatus } from "@/components/app/app-state";
 import { AlertCard } from "@/components/app/AlertCard";
@@ -28,10 +27,11 @@ const typeLabels: Record<AlertType, string> = {
   sobrecarga: "Sobrecarga", ausencia: "Item em ausência", feriado: "Item em feriado", sobreposicao: "Sobreposição",
   "sem-responsavel": "Sem responsável", "sem-estimativa": "Sem estimativa", "sem-iteracao": "Sem iteração", parado: "Item parado",
   "sprint-risco": "Sprint em risco", ociosa: "Pessoa ociosa", dependencia: "Dependência única",
+  impedimento: "Impedimento (Issue)", orfa: "Task sem item pai",
 };
 
 function Avisos() {
-  const { data, isLoading } = useQuery(snapshotQuery);
+  const { data, isLoading } = useSnapshot();
   const { alertStatus, filters } = useAppState();
   const [sev, setSev] = useState<Severity | "all">("all");
   const [type, setType] = useState<AlertType | "all">("all");

@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { addDays, format, parseISO } from "date-fns";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { snapshotQuery } from "@/services/api";
-import { pct, projects, teams, type PersonCapacity, type WeekCell } from "@/services/capacity";
+import { useSnapshot } from "@/services/api";
+import { pct, type PersonCapacity, type WeekCell } from "@/services/capacity";
+import { WorkItemTypeBadge } from "@/components/app/WorkItemTypeBadge";
 import { filterPeople, useAppState } from "@/components/app/app-state";
 import { Avatar, EmptyState, PageHeader, PageSkeleton } from "@/components/app/ui-bits";
 import { Legend, UtilizationBadge, statusMeta } from "@/components/app/status";
@@ -39,12 +39,13 @@ export function HeatmapCell({ cell, onClick }: { cell: WeekCell; onClick: () => 
 }
 
 function Heatmap() {
-  const { data, isLoading } = useQuery(snapshotQuery);
+  const { data, isLoading } = useSnapshot();
   const { filters } = useAppState();
   const [sel, setSel] = useState<{ pc: PersonCapacity; cell: WeekCell } | null>(null);
   if (isLoading || !data) return <PageSkeleton />;
   const n = Number(filters.period);
-  const list = filterPeople(data.people, filters);
+  const { projects, teams } = data;
+  const list = filterPeople(data.people, filters, data.workItems);
   const cfg = data.config;
 
   return (
@@ -110,12 +111,12 @@ function Heatmap() {
                 <UtilizationBadge util={sel.cell.utilization} status={sel.cell.status} />
                 <div className="space-y-2">
                   {sel.cell.items.length === 0 ? <EmptyState title="Sem itens nesta semana" /> : sel.cell.items.map(({ item, hours }) => {
-                    const p = projects.find((x) => x.id === item.projectId)!;
+                    const p = projects.find((x) => x.id === item.projectId);
                     return (
                       <div key={item.id} className="rounded-xl border border-border p-3">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span className="size-2 rounded-full" style={{ background: `var(${p.colorVar})` }} aria-hidden />
-                          #{item.id} · {p.code} · {item.state} · P{item.priority}
+                          <span className="size-2 rounded-full" style={{ background: `var(${p?.colorVar ?? "--color-primary"})` }} aria-hidden />
+                          <WorkItemTypeBadge item={item} showLabel={false} /> #{item.id} · {p?.code ?? item.projectId} · {item.state} · P{item.priority}
                           <span className="ml-auto font-bold text-foreground">{hours}h</span>
                         </div>
                         <p className="mt-1 text-sm font-medium text-foreground">{item.title}</p>

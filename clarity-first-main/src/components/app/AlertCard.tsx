@@ -1,38 +1,67 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { CalendarRange, Check, EyeOff, Sparkles } from "lucide-react";
+import { CalendarRange, Check, EyeOff, Loader2, Shuffle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { Alert } from "@/services/capacity";
+import { useSnapshot } from "@/services/api";
+import { explainAlertAI } from "@/services/azure-fns";
 import { SeverityBadge, severityMeta } from "./status";
 import { useAppState } from "./app-state";
+import { ReallocateDialog } from "./ReallocateDialog";
 
-const explain: Record<Alert["type"], string> = {
-  sobrecarga: "A carga planejada (horas estimadas distribuídas pelos dias úteis dos itens) passa da capacidade da pessoa na semana. Mover 1 ou 2 itens de menor prioridade para quem tem folga resolve sem atrasar a sprint.",
+/** Explicação base de cada tipo de aviso (também usada se a IA estiver indisponível). */
+export const explain: Record<Alert["type"], string> = {
+  sobrecarga: "A carga planejada (horas de Tasks e Bugs distribuídas pelos dias úteis) passa da capacidade da pessoa na semana. Mover 1 ou 2 itens de menor prioridade para quem tem folga resolve sem atrasar a sprint.",
   ausencia: "O item tem dias de execução que caem dentro de uma ausência registrada. Sem reatribuição, o trabalho fica parado nesse período.",
   feriado: "O item está agendado para um dia sem expediente. A capacidade desse dia é zero.",
   sobreposicao: "Dois itens de prioridade máxima disputam os mesmos dias da mesma pessoa. Sequenciar evita que ambos atrasem.",
   "sem-responsavel": "Itens sem responsável não entram no cálculo de capacidade de ninguém, então o risco fica invisível.",
-  "sem-estimativa": "Sem horas estimadas, o item conta como zero na carga. A utilização real da pessoa provavelmente é maior que a exibida.",
+  "sem-estimativa": "Sem horas (Remaining Work), a Task ou Bug conta como zero na carga. A utilização real da pessoa provavelmente é maior que a exibida.",
   "sem-iteracao": "Item fora de sprint não aparece no planejamento e tende a ser esquecido ou feito sem visibilidade.",
   parado: "O item está em andamento sem atualização além do limite configurado. Pode estar bloqueado sem registro.",
   "sprint-risco": "O trabalho restante está bem acima da linha ideal do burndown. No ritmo atual, parte do escopo não será entregue.",
   ociosa: "A pessoa tem capacidade livre consistente nas próximas semanas. É uma oportunidade de aliviar quem está sobrecarregado.",
   dependencia: "Todo o trabalho crítico do projeto depende de uma pessoa. Uma ausência dela paralisa as entregas.",
+  impedimento: "No processo Agile, uma Issue registra um impedimento: algo que trava o progresso. Enquanto ela estiver aberta, os itens ligados a ela tendem a atrasar.",
+  orfa: "No Agile, Tasks ficam abaixo de uma User Story (ou Bug). Sem esse vínculo, não dá para saber a que entrega a Task contribui nem medir o progresso da Feature.",
 };
 
 export function AlertCard({ alert, compact }: { alert: Alert; compact?: boolean }) {
   const { alertStatus, setAlertStatus, setFilter } = useAppState();
+  const { data } = useSnapshot();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiState, setAiState] = useState<"idle" | "loading" | "done" | "fallback">("idle");
+  const [moveOpen, setMoveOpen] = useState(false);
   const status = alertStatus[alert.id] ?? "Aberto";
+
+  // Item que pode ser realocado direto do aviso (o primeiro citado)
+  const movable = data?.workItems.find((w) => alert.itemIds?.includes(w.id) && w.state !== "Concluído");
+  const canMove = !!movable && ["sobrecarga", "ausencia", "sobreposicao", "sem-responsavel", "feriado"].includes(alert.type);
 
   const goTimeline = () => {
     if (alert.personId) setFilter("person", alert.personId);
     navigate({ to: "/timeline" });
+  };
+
+  const askAI = async () => {
+    setOpen(true);
+    if (aiState === "done" || aiState === "loading") return;
+    setAiState("loading");
+    try {
+      const res = await explainAlertAI({ data: { title: alert.title, description: alert.description, action: alert.action, why: explain[alert.type] } });
+      if (res.text) {
+        setAiText(res.text);
+        setAiState("done");
+      } else setAiState("fallback");
+    } catch {
+      setAiState("fallback");
+    }
   };
 
   return (
@@ -54,10 +83,15 @@ export function AlertCard({ alert, compact }: { alert: Alert; compact?: boolean 
       )}
       <p className="mt-2 text-xs font-semibold text-primary">→ {alert.action}</p>
       <div className="mt-3 flex flex-wrap gap-1.5">
+        {canMove && (
+          <Button size="sm" className="h-7 rounded-lg text-xs" onClick={() => setMoveOpen(true)}>
+            <Shuffle className="size-3" /> {alert.type === "sem-responsavel" ? "Atribuir" : "Realocar"}
+          </Button>
+        )}
         <Button size="sm" variant="outline" className="h-7 rounded-lg text-xs" onClick={goTimeline}>
           <CalendarRange className="size-3" /> Ver na timeline
         </Button>
-        <Button size="sm" variant="outline" className="h-7 rounded-lg text-xs" onClick={() => setOpen(true)}>
+        <Button size="sm" variant="outline" className="h-7 rounded-lg text-xs" onClick={askAI}>
           <Sparkles className="size-3" /> Explicar com IA
         </Button>
         {!compact && status === "Aberto" && (
@@ -81,23 +115,36 @@ export function AlertCard({ alert, compact }: { alert: Alert; compact?: boolean 
             <DialogTitle className="title-caps flex items-center gap-2 text-base"><Sparkles className="size-4 text-brand-cyan" /> Explicação da IA</DialogTitle>
             <DialogDescription>{alert.title}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <div className="rounded-xl bg-accent p-3">
-              <p className="mb-1 text-xs font-bold uppercase text-primary">O que está acontecendo</p>
-              <p className="text-foreground">{alert.description}</p>
+          {aiState === "loading" && (
+            <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Analisando os números do aviso…</p>
+          )}
+          {aiState === "done" && aiText && (
+            <div className="space-y-3 text-sm">
+              <div className="whitespace-pre-line rounded-xl bg-accent p-3 text-foreground">{aiText}</div>
+              <p className="text-[11px] text-muted-foreground">Gerado por IA a partir dos dados deste aviso. Os números vêm do cálculo do iCrew, não da IA.</p>
             </div>
-            <div className="rounded-xl border border-border p-3">
-              <p className="mb-1 text-xs font-bold uppercase text-muted-foreground">Por que importa</p>
-              <p className="text-foreground">{explain[alert.type]}</p>
+          )}
+          {aiState === "fallback" && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-xl bg-accent p-3">
+                <p className="mb-1 text-xs font-bold uppercase text-primary">O que está acontecendo</p>
+                <p className="text-foreground">{alert.description}</p>
+              </div>
+              <div className="rounded-xl border border-border p-3">
+                <p className="mb-1 text-xs font-bold uppercase text-muted-foreground">Por que importa</p>
+                <p className="text-foreground">{explain[alert.type]}</p>
+              </div>
+              <div className="rounded-xl border border-border p-3">
+                <p className="mb-1 text-xs font-bold uppercase text-muted-foreground">Sugestão</p>
+                <p className="font-medium text-foreground">{alert.action}</p>
+              </div>
+              <p className="text-[11px] text-muted-foreground">IA indisponível no momento; mostrando a explicação padrão.</p>
             </div>
-            <div className="rounded-xl border border-border p-3">
-              <p className="mb-1 text-xs font-bold uppercase text-muted-foreground">Sugestão</p>
-              <p className="font-medium text-foreground">{alert.action}</p>
-            </div>
-            <p className="text-[11px] text-muted-foreground">Resposta simulada nesta etapa.</p>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
+
+      {canMove && <ReallocateDialog item={moveOpen ? movable! : null} open={moveOpen} onOpenChange={setMoveOpen} />}
     </article>
   );
 }

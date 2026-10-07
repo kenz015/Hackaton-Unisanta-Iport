@@ -1,43 +1,28 @@
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import {
-  Bell, Bot, CalendarRange, FileText, FolderKanban, Grid3x3, LayoutDashboard, Moon, RefreshCw, Settings, ShieldCheck, Sun, Users, X,
-} from "lucide-react";
+import { Bell, CalendarRange, Database, Grid3x3, LayoutDashboard, Moon, RefreshCw, Sun, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { snapshotQuery } from "@/services/api";
-import { people, projects, sprints, teams } from "@/services/capacity";
+import { useSnapshot } from "@/services/api";
+import { WORK_ITEM_TYPES, typeMeta } from "@/data/agile";
 import { useAppState, type Filters } from "./app-state";
 
+/** Só as telas prontas aparecem no menu. As outras rotas continuam existindo. */
 const nav = [
   { to: "/", label: "Visão geral", icon: LayoutDashboard },
   { to: "/timeline", label: "Timeline", icon: CalendarRange },
   { to: "/heatmap", label: "Heatmap", icon: Grid3x3 },
-  { to: "/pessoas", label: "Pessoas", icon: Users },
-  { to: "/projetos", label: "Projetos e itens", icon: FolderKanban },
   { to: "/avisos", label: "Central de avisos", icon: Bell },
-  { to: "/governanca", label: "Governança", icon: ShieldCheck },
-  { to: "/assistente", label: "Assistente IA", icon: Bot },
-  { to: "/relatorios", label: "Resumos", icon: FileText },
-  { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
 function Sidebar() {
   return (
     <aside className="sticky top-0 flex h-screen w-16 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:w-60">
       <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-3 lg:px-5">
-        {/* Espaço reservado para o logo da iPORT */}
-        <div className="grid size-9 place-items-center rounded-xl border border-dashed border-primary/40 text-[9px] font-bold text-primary" title="Logo iPORT">
-          <img 
-  src="/logo.jpeg" 
-  alt="Logo iPORT" 
-  className="size-9 object-contain rounded-xl" 
-/>
-        </div>
+        <img src="/logo.jpeg" alt="Logo iPORT" className="size-9 rounded-xl object-contain" />
         <div className="hidden leading-tight lg:block">
           <div className="text-lg font-extrabold tracking-tight text-primary">iCrew</div>
           <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">iPORT Solutions</div>
@@ -83,21 +68,28 @@ function FilterSelect({ k, label, options }: { k: keyof Filters; label: string; 
 
 function Header() {
   const { lastSync, sync, syncing, theme, toggleTheme, filters, resetFilters, alertStatus } = useAppState();
-  const { data } = useQuery(snapshotQuery);
+  const { data, warning } = useSnapshot();
   const navigate = useNavigate();
   const openCount = data?.alerts.filter((a) => (alertStatus[a.id] ?? "Aberto") === "Aberto").length ?? 0;
   const hasFilters = Object.entries(filters).some(([k, v]) => (k === "period" ? v !== "8" : v !== "all"));
   const all = { value: "all", label: "Todos" };
+  const isAzure = data?.origin === "azure";
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
       <div className="flex h-16 items-center justify-between gap-4 px-4 lg:px-8">
         <p className="title-caps hidden text-sm text-foreground md:block">
           <span className="text-primary">SUA</span> OPERAÇÃO, <span className="text-brand-cyan">NOSSOS</span> SISTEMAS
         </p>
         <div className="ml-auto flex items-center gap-2">
+          <span
+            className={cn("hidden items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold sm:inline-flex", isAzure ? "bg-status-available text-status-available-foreground" : "bg-highlight-soft text-highlight-foreground dark:text-highlight")}
+            title={warning ?? (isAzure ? "Dados lidos do Azure DevOps" : "Configure o .env para ler o Azure DevOps")}
+          >
+            <Database className="size-3" aria-hidden /> {isAzure ? "Azure DevOps" : "Dados de demonstração"}
+          </span>
           <span className="hidden text-xs text-muted-foreground xl:inline">
-            Última sincronização: {formatDistanceToNow(lastSync, { locale: ptBR, addSuffix: true })}
+            Sincronizado {formatDistanceToNow(lastSync, { locale: ptBR, addSuffix: true })}
           </span>
           <Button size="sm" variant="outline" onClick={sync} disabled={syncing} className="rounded-lg">
             <RefreshCw className={cn("size-4", syncing && "animate-spin")} aria-hidden />
@@ -116,18 +108,21 @@ function Header() {
           </Button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2 lg:px-8">
-        <FilterSelect k="project" label="Projeto" options={[all, ...projects.map((p) => ({ value: p.id, label: p.name }))]} />
-        <FilterSelect k="team" label="Equipe" options={[all, ...teams.map((t) => ({ value: t.id, label: t.name }))]} />
-        <FilterSelect k="sprint" label="Iteração" options={[{ value: "all", label: "Todas" }, ...sprints.map((s) => ({ value: s.id, label: s.name }))]} />
-        <FilterSelect k="period" label="Período" options={[{ value: "4", label: "4 semanas" }, { value: "8", label: "8 semanas" }]} />
-        <FilterSelect k="person" label="Pessoa" options={[all, ...people.map((p) => ({ value: p.id, label: p.name }))]} />
-        {hasFilters && (
-          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={resetFilters}>
-            <X className="size-3" /> Limpar filtros
-          </Button>
-        )}
-      </div>
+      {data && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2 lg:px-8">
+          <FilterSelect k="project" label="Projeto" options={[all, ...data.projects.map((p) => ({ value: p.id, label: p.name }))]} />
+          <FilterSelect k="team" label="Equipe" options={[all, ...data.teams.map((t) => ({ value: t.id, label: t.name }))]} />
+          <FilterSelect k="sprint" label="Iteração" options={[{ value: "all", label: "Todas" }, ...data.sprints.map((s) => ({ value: s.id, label: s.name }))]} />
+          <FilterSelect k="type" label="Tipo" options={[all, ...WORK_ITEM_TYPES.map((t) => ({ value: t, label: typeMeta[t].label }))]} />
+          <FilterSelect k="period" label="Período" options={[{ value: "4", label: "4 semanas" }, { value: "8", label: "8 semanas" }]} />
+          <FilterSelect k="person" label="Pessoa" options={[all, ...data.people.map((p) => ({ value: p.person.id, label: p.person.name }))]} />
+          {hasFilters && (
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={resetFilters}>
+              <X className="size-3" /> Limpar filtros
+            </Button>
+          )}
+        </div>
+      )}
     </header>
   );
 }
