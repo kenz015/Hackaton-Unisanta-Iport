@@ -11,13 +11,16 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AssistenteRouteImport } from './routes/assistente'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AvisosRouteImport } from './routes/avisos'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as GovernancaRouteImport } from './routes/governanca'
 import { Route as HeatmapRouteImport } from './routes/heatmap'
 import { Route as PessoasRouteImport } from './routes/pessoas'
 import { Route as ProjetosRouteImport } from './routes/projetos'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as TimelineRouteImport } from './routes/timeline'
 
 const IndexRoute = IndexRouteImport.update({
@@ -30,6 +33,11 @@ const AssistenteRoute = AssistenteRouteImport.update({
   path: '/assistente',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AvisosRoute = AvisosRouteImport.update({
   id: '/avisos',
   path: '/avisos',
@@ -38,6 +46,11 @@ const AvisosRoute = AvisosRouteImport.update({
 const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
   id: '/configuracoes',
   path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GovernancaRoute = GovernancaRouteImport.update({
@@ -65,6 +78,11 @@ const RelatoriosRoute = RelatoriosRouteImport.update({
   path: '/relatorios',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TimelineRoute = TimelineRouteImport.update({
   id: '/timeline',
   path: '/timeline',
@@ -74,38 +92,47 @@ const TimelineRoute = TimelineRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/assistente': typeof AssistenteRoute
+  '/auth': typeof AuthRoute
   '/avisos': typeof AvisosRoute
   '/configuracoes': typeof ConfiguracoesRoute
+  '/dashboard': typeof DashboardRoute
   '/governanca': typeof GovernancaRoute
   '/heatmap': typeof HeatmapRoute
   '/pessoas': typeof PessoasRoute
   '/projetos': typeof ProjetosRoute
   '/relatorios': typeof RelatoriosRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/timeline': typeof TimelineRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/assistente': typeof AssistenteRoute
+  '/auth': typeof AuthRoute
   '/avisos': typeof AvisosRoute
   '/configuracoes': typeof ConfiguracoesRoute
+  '/dashboard': typeof DashboardRoute
   '/governanca': typeof GovernancaRoute
   '/heatmap': typeof HeatmapRoute
   '/pessoas': typeof PessoasRoute
   '/projetos': typeof ProjetosRoute
   '/relatorios': typeof RelatoriosRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/timeline': typeof TimelineRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/assistente': typeof AssistenteRoute
+  '/auth': typeof AuthRoute
   '/avisos': typeof AvisosRoute
   '/configuracoes': typeof ConfiguracoesRoute
+  '/dashboard': typeof DashboardRoute
   '/governanca': typeof GovernancaRoute
   '/heatmap': typeof HeatmapRoute
   '/pessoas': typeof PessoasRoute
   '/projetos': typeof ProjetosRoute
   '/relatorios': typeof RelatoriosRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/timeline': typeof TimelineRoute
 }
 export interface FileRouteTypes {
@@ -113,50 +140,62 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/assistente'
+    | '/auth'
     | '/avisos'
     | '/configuracoes'
+    | '/dashboard'
     | '/governanca'
     | '/heatmap'
     | '/pessoas'
     | '/projetos'
     | '/relatorios'
+    | '/reset-password'
     | '/timeline'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/assistente'
+    | '/auth'
     | '/avisos'
     | '/configuracoes'
+    | '/dashboard'
     | '/governanca'
     | '/heatmap'
     | '/pessoas'
     | '/projetos'
     | '/relatorios'
+    | '/reset-password'
     | '/timeline'
   id:
     | '__root__'
     | '/'
     | '/assistente'
+    | '/auth'
     | '/avisos'
     | '/configuracoes'
+    | '/dashboard'
     | '/governanca'
     | '/heatmap'
     | '/pessoas'
     | '/projetos'
     | '/relatorios'
+    | '/reset-password'
     | '/timeline'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AssistenteRoute: typeof AssistenteRoute
+  AuthRoute: typeof AuthRoute
   AvisosRoute: typeof AvisosRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
+  DashboardRoute: typeof DashboardRoute
   GovernancaRoute: typeof GovernancaRoute
   HeatmapRoute: typeof HeatmapRoute
   PessoasRoute: typeof PessoasRoute
   ProjetosRoute: typeof ProjetosRoute
   RelatoriosRoute: typeof RelatoriosRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   TimelineRoute: typeof TimelineRoute
 }
 
@@ -176,6 +215,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssistenteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/avisos': {
       id: '/avisos'
       path: '/avisos'
@@ -188,6 +234,13 @@ declare module '@tanstack/react-router' {
       path: '/configuracoes'
       fullPath: '/configuracoes'
       preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/governanca': {
@@ -225,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RelatoriosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/timeline': {
       id: '/timeline'
       path: '/timeline'
@@ -238,13 +298,16 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AssistenteRoute: AssistenteRoute,
+  AuthRoute: AuthRoute,
   AvisosRoute: AvisosRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
+  DashboardRoute: DashboardRoute,
   GovernancaRoute: GovernancaRoute,
   HeatmapRoute: HeatmapRoute,
   PessoasRoute: PessoasRoute,
   ProjetosRoute: ProjetosRoute,
   RelatoriosRoute: RelatoriosRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   TimelineRoute: TimelineRoute,
 }
 export const routeTree = rootRouteImport

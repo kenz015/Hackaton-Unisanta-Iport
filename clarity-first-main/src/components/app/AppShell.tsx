@@ -2,17 +2,19 @@ import type { ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Bell, CalendarRange, Database, Grid3x3, LayoutDashboard, Moon, RefreshCw, Sun, X } from "lucide-react";
+import { Bell, CalendarRange, Database, Grid3x3, LayoutDashboard, LogOut, Moon, RefreshCw, Sun, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useSnapshot } from "@/services/api";
 import { WORK_ITEM_TYPES, typeMeta } from "@/data/agile";
 import { useAppState, type Filters } from "./app-state";
+import { useAuth } from "@/components/auth/auth-provider";
+import { Avatar } from "./ui-bits";
 
 /** Só as telas prontas aparecem no menu. As outras rotas continuam existindo. */
 const nav = [
-  { to: "/", label: "Visão geral", icon: LayoutDashboard },
+  { to: "/dashboard", label: "Visão geral", icon: LayoutDashboard },
   { to: "/timeline", label: "Timeline", icon: CalendarRange },
   { to: "/heatmap", label: "Heatmap", icon: Grid3x3 },
   { to: "/avisos", label: "Central de avisos", icon: Bell },
@@ -33,7 +35,7 @@ function Sidebar() {
           <Link
             key={n.to}
             to={n.to}
-            activeOptions={{ exact: n.to === "/" }}
+            activeOptions={{ exact: true }}
             className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             activeProps={{ className: "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground" }}
             title={n.label}
@@ -43,7 +45,32 @@ function Sidebar() {
           </Link>
         ))}
       </nav>
+      <UserBox />
     </aside>
+  );
+}
+
+function UserBox() {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  if (!user) return null;
+  const logout = async () => {
+    await signOut();
+    void navigate({ to: "/", replace: true });
+  };
+  return (
+    <div className="border-t border-sidebar-border p-2 lg:p-3">
+      <div className="flex items-center gap-2 rounded-xl px-1 py-1.5 lg:px-2">
+        <span className="hidden lg:block"><Avatar name={user.name} /></span>
+        <div className="hidden min-w-0 flex-1 leading-tight lg:block">
+          <p className="truncate text-sm font-semibold text-sidebar-foreground">{user.name}</p>
+          <p className="truncate text-[11px] text-muted-foreground">{user.demo ? "Modo demonstração" : user.email}</p>
+        </div>
+        <Button size="icon" variant="ghost" className="mx-auto shrink-0 rounded-lg lg:mx-0" onClick={logout} aria-label="Sair" title="Sair">
+          <LogOut className="size-4" aria-hidden />
+        </Button>
+      </div>
+    </div>
   );
 }
 

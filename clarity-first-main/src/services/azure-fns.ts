@@ -2,7 +2,7 @@
  * Funções que rodam SÓ NO SERVIDOR (TanStack Start "server functions").
  * O PAT do Azure e a chave da IA ficam no .env e nunca chegam ao navegador.
  *
- * Variáveis no .env (na pasta clarity-first-main):
+ * Variáveis no .env (na pasta clarity-first-main ou na raiz do repositório):
  *   ADO_ORG=nome-da-organizacao
  *   ADO_PROJECT=nome-do-projeto
  *   ADO_TEAM=nome-do-time           (opcional; padrão "<projeto> Team")
@@ -18,7 +18,24 @@ import { DEFAULT_HOLIDAYS, mapAgileState, type WorkItemType } from "@/data/agile
 import type { Item, Source } from "@/services/capacity";
 
 const API = "api-version=7.1";
-const env = (k: string) => process.env[k]?.trim() || "";
+/**
+ * Lê o .env da pasta clarity-first-main e, se faltar algo, o .env da raiz do
+ * repositório (o mesmo que a api.py usa). Variáveis já definidas não são trocadas.
+ */
+let envLoaded = false;
+function loadEnvFiles() {
+  if (envLoaded) return;
+  envLoaded = true;
+  const load = (process as { loadEnvFile?: (path: string) => void }).loadEnvFile;
+  if (typeof load !== "function") return;
+  for (const file of [".env", "../.env"]) {
+    try { load(file); } catch { /* arquivo não existe: tudo bem */ }
+  }
+}
+const env = (k: string) => {
+  loadEnvFiles();
+  return process.env[k]?.trim() || "";
+};
 
 function azureConfig() {
   const org = env("ADO_ORG");

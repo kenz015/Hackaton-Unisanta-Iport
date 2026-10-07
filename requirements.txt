@@ -1,6 +1,7 @@
-streamlit
 requests
 pandas
 python-dotenv
 plotly
 openai
+flask
+flask-cors

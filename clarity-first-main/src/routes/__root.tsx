@@ -3,7 +3,6 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
-  useRouter,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
@@ -16,6 +15,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppStateProvider } from "@/components/app/app-state";
 import { AppShell } from "@/components/app/AppShell";
+import { AuthProvider } from "@/components/auth/auth-provider";
+import { AuthGate } from "@/components/auth/AuthGate";
 
 function NotFoundComponent() {
   return (
@@ -41,7 +42,6 @@ function NotFoundComponent() {
 
 function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
-  const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
@@ -58,7 +58,6 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
-              router.invalidate();
               reset();
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
@@ -124,15 +123,19 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <AppStateProvider>
-        <TooltipProvider delayDuration={150}>
-          <AppShell>
-            <Outlet />
-          </AppShell>
-          <Toaster richColors position="top-right" />
-        </TooltipProvider>
-      </AppStateProvider>
+      <AuthProvider>
+        <AppStateProvider>
+          <TooltipProvider delayDuration={150}>
+            {/* O login roda primeiro: sem sessão, o AuthGate manda para /auth. */}
+            <AuthGate publicPage={<Outlet />}>
+              <AppShell>
+                <Outlet />
+              </AppShell>
+            </AuthGate>
+            <Toaster richColors position="top-right" />
+          </TooltipProvider>
+        </AppStateProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
