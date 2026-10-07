@@ -1,16 +1,23 @@
 /**
  * Cliente do Supabase (login). Roda só no navegador.
  *
- * Variáveis no .env da pasta clarity-first-main:
- *   VITE_SUPABASE_URL=https://xxxx.supabase.co
- *   VITE_SUPABASE_PUBLISHABLE_KEY=chave-publica (pode ficar no front, é pública)
- *
- * Sem essas variáveis o login entra em "modo demonstração".
+ * Usa os valores públicos abaixo. Opcionalmente, o .env da pasta
+ * clarity-first-main pode sobrescrever com VITE_SUPABASE_URL e
+ * VITE_SUPABASE_PUBLISHABLE_KEY.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const url = (import.meta.env['VITE_SUPABASE_URL'] as string | undefined)?.trim();
-const key = (import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] as string | undefined)?.trim();
+/**
+ * Valores PÚBLICOS do projeto Supabase (Lovable Cloud) do iCrew.
+ * A "publishable key" é feita para ficar no navegador — não é segredo.
+ * Assim o login funciona logo após o git pull, sem precisar de .env.
+ * (Se quiser apontar para outro projeto, defina as variáveis no .env.)
+ */
+const DEFAULT_SUPABASE_URL = "https://sapugrjzkiuglcyfhkwq.supabase.co";
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_jHnUinmhJH982AKRFRMYcA_GImiXvUg";
+
+const url = ((import.meta.env['VITE_SUPABASE_URL'] as string | undefined)?.trim() || DEFAULT_SUPABASE_URL).trim();
+const key = ((import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] as string | undefined)?.trim() || DEFAULT_SUPABASE_PUBLISHABLE_KEY).trim();
 
 export const supabaseConfigured = !!url && !!key;
 
