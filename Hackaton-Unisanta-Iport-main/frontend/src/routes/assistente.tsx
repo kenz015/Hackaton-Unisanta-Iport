@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ComingSoon } from "@/components/app/ComingSoon";
 
 export const Route = createFileRoute("/assistente")({
   head: () => ({
@@ -12,5 +11,9 @@ export const Route = createFileRoute("/assistente")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: () => <ComingSoon title="Assistente IA" items={['Chat com perguntas prontas em chips', 'Respostas em cards: resumo, riscos e sugestões de/para', 'Impacto da realocação na utilização']} />,
+  component: () => (
+    <div className="flex h-[calc(100vh-4rem)] items-center justify-center p-6 text-sm text-muted-foreground">
+      Use o chat do Créu no canto inferior direito da tela.
+    </div>
+  ),
 });

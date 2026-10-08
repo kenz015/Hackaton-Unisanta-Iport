@@ -10,6 +10,8 @@ import { useSnapshot } from "@/services/api";
 import { useAppState } from "./app-state";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Avatar } from "./ui-bits";
+import CreuChatbot from "@/components/app/creuchatbot";
+import { useEffect, useState } from "react";
 
 /** Só as telas prontas aparecem no menu. As outras rotas continuam existindo. */
 const nav = [
@@ -110,7 +112,7 @@ function Header() {
                 <Bell className="size-5" aria-hidden />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[22rem] p-0">
+            <DropdownMenuContent align="end" className="w-88 p-0">
               <DropdownMenuLabel className="flex items-center justify-between px-3 py-2">
                 <span>Avisos em aberto</span>
                 {openCount > 0 && <span className="text-[10px] font-medium text-muted-foreground">{openCount} ativas</span>}
@@ -153,13 +155,36 @@ function Header() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const [isConfigPage, setIsConfigPage] = useState(false);
+
+  useEffect(() => {
+    const checkRoute = () => {
+      if (typeof window !== "undefined") {
+        setIsConfigPage(window.location.pathname.includes("configuracoes"));
+      }
+    };
+
+    // Executa ao montar e monitoriza mudanças de histórico/url sem tocar no router state
+    checkRoute();
+    window.addEventListener("popstate", checkRoute);
+    const interval = setInterval(checkRoute, 200);
+
+    return () => {
+      window.removeEventListener("popstate", checkRoute);
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background relative">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header />
         <main className="flex-1 px-4 py-6 lg:px-8">{children}</main>
       </div>
+
+      {/* O chatbot do Créu renderiza de forma isolada e nunca interfere com o carregamento das páginas */}
+      {!isConfigPage && <CreuChatbot />}
     </div>
   );
 }
