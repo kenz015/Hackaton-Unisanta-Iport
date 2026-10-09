@@ -9,7 +9,7 @@
 services:
   # ---------- API de dados (backend/api.py) ----------
   - type: web
-    name: icrew-unisanta-api
+    name: icrew-api
     runtime: python
     plan: free
     rootDir: backend
@@ -27,7 +27,7 @@ services:
       - key: API_SHARED_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://icrew-unisanta-site.onrender.com
+        value: https://icrew-site.onrender.com
       - key: ADO_ORG
         value: gs255041
       - key: ADO_PROJECT
@@ -41,7 +41,7 @@ services:
 
   # ---------- Créu, o chatbot (backend/app.py) ----------
   - type: web
-    name: icrew-unisanta-creu
+    name: icrew-creu
     runtime: python
     plan: free
     rootDir: backend
@@ -56,7 +56,7 @@ services:
       - key: FLASK_DEBUG
         value: "false"
       - key: CORS_ORIGINS
-        value: https://icrew-unisanta-site.onrender.com
+        value: https://icrew-site.onrender.com
       - key: ADO_ORG
         value: gs255041
       - key: ADO_PROJECT
@@ -70,7 +70,7 @@ services:
 
   # ---------- Site (frontend) ----------
   - type: web
-    name: icrew-unisanta-site
+    name: icrew-site
     runtime: node
     plan: free
     rootDir: frontend
@@ -82,12 +82,12 @@ services:
       - key: NODE_VERSION
         value: "22"
       - key: BACKEND_URL
-        value: https://icrew-unisanta-api.onrender.com
+        value: https://icrew-api.onrender.com
       # Lido no build: o navegador fala direto com o Créu
       - key: VITE_CHATBOT_URL
-        value: https://icrew-unisanta-creu.onrender.com/api/chatbot
+        value: https://icrew-creu.onrender.com/api/chatbot
       - key: API_SHARED_SECRET
         fromService:
           type: web
-          name: icrew-unisanta-api
+          name: icrew-api
           envVarKey: API_SHARED_SECRET
