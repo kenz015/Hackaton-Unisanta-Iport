@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { CalendarRange, Check, EyeOff, Loader2, Shuffle, Sparkles } from "lucide-react";
@@ -39,6 +39,13 @@ export function AlertCard({ alert, compact }: { alert: Alert; compact?: boolean 
   const [aiText, setAiText] = useState<string | null>(null);
   const [aiState, setAiState] = useState<"idle" | "loading" | "done" | "fallback">("idle");
   const [moveOpen, setMoveOpen] = useState(false);
+  /** Depois de alguns segundos esperando, avisa que a IA está demorando. */
+  const [demorando, setDemorando] = useState(false);
+  useEffect(() => {
+    if (aiState !== "loading") { setDemorando(false); return; }
+    const t = setTimeout(() => setDemorando(true), 10_000);
+    return () => clearTimeout(t);
+  }, [aiState]);
   const status = alertStatus[alert.id] ?? "Aberto";
 
   // Item que pode ser realocado direto do aviso (o primeiro citado)
@@ -54,8 +61,10 @@ export function AlertCard({ alert, compact }: { alert: Alert; compact?: boolean 
     setOpen(true);
     if (aiState === "done" || aiState === "loading") return;
     setAiState("loading");
+    // Nunca deixa o carregamento infinito: depois de 45s mostra a explicação padrão
+    const limite = new Promise<{ text: null }>((resolve) => setTimeout(() => resolve({ text: null }), 45_000));
     try {
-      const res = await explainAlertAI({
+      const pedido = explainAlertAI({
         data: {
           title: alert.title,
           description: alert.description,
@@ -66,6 +75,7 @@ export function AlertCard({ alert, compact }: { alert: Alert; compact?: boolean 
           accessToken: await getAccessToken(),
         },
       });
+      const res = await Promise.race([pedido, limite]);
       if (res.text) {
         setAiText(res.text);
         setAiState("done");
@@ -127,11 +137,16 @@ export function AlertCard({ alert, compact }: { alert: Alert; compact?: boolean 
             <DialogDescription>{alert.title}</DialogDescription>
           </DialogHeader>
           {aiState === "loading" && (
-            <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Analisando os números do aviso…</p>
+            <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> {demorando ? "A IA está demorando um pouco mais que o normal… se passar de 45s, mostramos a explicação padrão." : "Analisando os números do aviso…"}</p>
           )}
           {aiState === "done" && aiText && (
             <div className="space-y-3 text-sm">
-              <div className="whitespace-pre-line rounded-xl bg-accent p-3 text-foreground">{aiText}</div>
+              <div className="whitespace-pre-line rounded-xl bg-accent p-3 text-foreground">
+                {/* Mostra o **negrito** que a IA usa nos títulos */}
+                {aiText.split(/(\*\*[^*]+\*\*)/g).map((parte, i) =>
+                  parte.startsWith("**") && parte.endsWith("**") && parte.length > 4 ? <strong key={i}>{parte.slice(2, -2)}</strong> : <span key={i}>{parte}</span>,
+                )}
+              </div>
               <p className="text-[11px] text-muted-foreground">Gerado por IA a partir dos dados deste aviso. Os números vêm do cálculo do iCrew, não da IA.</p>
             </div>
           )}

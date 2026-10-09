@@ -1,5 +1,6 @@
 import hmac
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -10,6 +11,7 @@ from rules_engine import validar_processo
 from source_builder import montar_source
 
 app = Flask(__name__)
+_executor = ThreadPoolExecutor(max_workers=4)  # consultas ao Azure com prazo
 # Só o próprio site do iCrew pode chamar esta API pelo navegador
 ORIGENS_PERMITIDAS = [
     o.strip() for o in os.getenv("CORS_ORIGINS", "http://127.0.0.1:8080,http://localhost:8080").split(",") if o.strip()
@@ -135,14 +137,15 @@ def explain_alert():
     except (TypeError, ValueError):
         item_id = None
 
-    if item_id is not None:
+    if item_id is not None and not contexto:
+        # Detalhes do item no Azure enriquecem a explicação, mas sem travar: no máximo 5s
         try:
-            client = AzureDevOpsClient()
-            itens = client.buscar_detalhes_itens([int(item_id)])
+            futuro = _executor.submit(lambda: AzureDevOpsClient().buscar_detalhes_itens([int(item_id)]))
+            itens = futuro.result(timeout=5)
             if itens:
-                contexto = contexto or itens[0]
-        except Exception:
-            contexto = contexto
+                contexto = itens[0]
+        except Exception as exc:
+            print(f"[api] Sem contexto do Azure para a explicação: {exc!r}")
 
     texto = explicar_alerta(problema, descricao, contexto=contexto)
     return jsonify({"status": "sucesso", "resposta": texto, "contexto": contexto})

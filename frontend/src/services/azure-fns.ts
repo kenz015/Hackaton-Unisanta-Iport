@@ -337,7 +337,7 @@ export const explainAlertAI = createServerFn({ method: "POST" })
         method: "POST",
         headers: backendHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(40_000),
       });
       if (!res.ok) return { text: null as string | null };
       const json = (await res.json()) as { resposta?: string; status?: string };

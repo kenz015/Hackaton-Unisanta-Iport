@@ -19,6 +19,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
+      # Mostra os print() no log na hora (sem isso o Python segura as mensagens)
+      - key: PYTHONUNBUFFERED
+        value: "1"
       - key: API_HOST
         value: 0.0.0.0
       - key: FLASK_DEBUG
@@ -51,6 +54,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
+      # Mostra os print() no log na hora (sem isso o Python segura as mensagens)
+      - key: PYTHONUNBUFFERED
+        value: "1"
       - key: CHATBOT_HOST
         value: 0.0.0.0
       - key: FLASK_DEBUG
@@ -74,8 +80,10 @@ services:
     runtime: node
     plan: free
     rootDir: frontend
-    # node-server: gera um servidor Node comum (o padrão seria Cloudflare)
-    buildCommand: npm ci && NITRO_PRESET=node-server npm run build
+    # node-server: gera um servidor Node comum (o padrão seria Cloudflare).
+    # "npm install" (e não "npm ci"): o package-lock foi gerado no Windows e não traz
+    # alguns pacotes que o Linux do Render precisa.
+    buildCommand: npm install --no-audit --no-fund && NITRO_PRESET=node-server npm run build
     startCommand: node .output/server/index.mjs
     healthCheckPath: /
     envVars:
@@ -91,3 +99,12 @@ services:
           type: web
           name: icrew-api
           envVarKey: API_SHARED_SECRET
+      # O próprio site grava o novo responsável no Azure (botões Realocar/Atribuir)
+      - key: ADO_ORG
+        value: gs255041
+      - key: ADO_PROJECT
+        value: iCrew
+      - key: ADO_TEAM
+        value: iCrew Team
+      - key: ADO_PAT
+        sync: false

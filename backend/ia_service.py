@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 import requests
@@ -33,9 +34,12 @@ api_key = next(
 provider = (os.getenv("AI_PROVIDER") or "gemini").strip().lower()
 model = (os.getenv("AI_MODEL") or "").strip()
 if provider == "gemini" and not model.lower().startswith("gemini"):
-    model = (os.getenv("GEMINI_MODEL") or "gemini-flash-latest").strip()  # AI_MODEL era de outro provedor (ex.: gpt-4o-mini)
-# Se o modelo não existir para a conta (404), tenta estes na ordem
-MODELOS_GEMINI = list(dict.fromkeys([model, "gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest"]))
+    model = (os.getenv("GEMINI_MODEL") or "gemini-flash-lite-latest").strip()  # AI_MODEL era de outro provedor (ex.: gpt-4o-mini)
+# Ordem de tentativa (404 = modelo indisponível para a conta → próximo). O "lite" é o mais rápido,
+# e para uma explicação curta de alerta ele basta.
+MODELOS_GEMINI = list(dict.fromkeys([model, "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-flash-latest"]))
+# Tempo máximo para gerar a explicação (somando todas as tentativas). Depois disso, usa o texto padrão.
+PRAZO_TOTAL_S = 25
 
 
 def _normalizar_contexto_azure(contexto):
@@ -83,12 +87,13 @@ def _gerar_resposta_gemini(tipo_problema, descricao, contexto=None):
     contexto_texto = _normalizar_contexto_azure(contexto)
     prompt = (
         "Você é um gestor de projetos e mentor ágil em português do Brasil. "
-        "Responda como se estivesse explicando o caso para uma liderança executiva, de forma clara, objetiva e didática. "
+        "Explique o caso para um gestor, de forma clara e direta. "
         f"Tipo do alerta: {tipo_problema}. "
         f"Detalhes do caso: {descricao}. "
         + (f"Contexto do item do Azure DevOps: {contexto_texto} " if contexto_texto else "")
-        + "Estrutura a resposta em 5 partes: 1) Resumo executivo; 2) Causa provável; 3) Impacto no time e na entrega; 4) Risco e prioridade; 5) Recomendação prática e imediata. "
-        "Use linguagem de gestor, explique o problema sem jargão excessivo e mantenha uma explicação mais lenta e completa do que uma resposta curta."
+        + "Responda em no máximo 120 palavras, em 3 tópicos curtos: "
+        "**O que está acontecendo**, **Impacto na entrega** e **O que fazer agora**. "
+        "Use os números do caso, sem jargão e sem introdução."
     )
 
     payload = {
@@ -100,24 +105,46 @@ def _gerar_resposta_gemini(tipo_problema, descricao, contexto=None):
         ],
         "generationConfig": {"temperature": 0.3},
     }
+    inicio = time.time()
 
     data = None
+    ultimo_status = None
     for nome_modelo in MODELOS_GEMINI:
+        restante = PRAZO_TOTAL_S - (time.time() - inicio)
+        if restante < 3:
+            raise RuntimeError(f"Prazo de {PRAZO_TOTAL_S}s esgotado antes de a IA responder.")
         # A chave vai no cabeçalho (não na URL), para nunca aparecer em mensagens de erro
+        corpo = payload
+        if "2.5" in nome_modelo:
+            # Os modelos 2.5 "pensam" antes de responder; desligar deixa a resposta bem mais rápida
+            corpo = {**payload, "generationConfig": {**payload["generationConfig"], "thinkingConfig": {"thinkingBudget": 0}}}
         response = requests.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{nome_modelo}:generateContent",
-            json=payload,
+            json=corpo,
             headers={"x-goog-api-key": api_key},
-            timeout=30,
+            timeout=restante,
         )
-        if response.status_code == 404:
-            continue  # modelo não disponível para esta conta: tenta o próximo
+        if response.status_code == 400 and corpo is not payload:
+            # Modelo não aceitou a configuração de "pensamento": tenta de novo sem ela
+            response = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{nome_modelo}:generateContent",
+                json=payload,
+                headers={"x-goog-api-key": api_key},
+                timeout=max(3, PRAZO_TOTAL_S - (time.time() - inicio)),
+            )
+        if response.status_code in (404, 429, 500, 503, 504):
+            # 404 = modelo indisponível para a conta; 429/5xx = Gemini ocupado ou limite atingido.
+            # Em todos esses casos vale tentar o próximo modelo (dentro do prazo).
+            print(f"[ia] {nome_modelo} respondeu HTTP {response.status_code}; tentando o próximo modelo")
+            ultimo_status = response.status_code
+            continue
         if response.status_code != 200:
-            raise RuntimeError(f"Gemini respondeu HTTP {response.status_code}")
+            raise RuntimeError(f"Gemini respondeu HTTP {response.status_code}: {response.text[:200]}")
         data = response.json()
+        print(f"[ia] explicação gerada em {time.time() - inicio:.1f}s com {nome_modelo}")
         break
     if data is None:
-        raise RuntimeError("Nenhum modelo do Gemini disponível para esta chave.")
+        raise RuntimeError(f"Nenhum modelo do Gemini respondeu (último status: {ultimo_status}).")
 
     candidates = data.get("candidates", [])
     if not candidates:

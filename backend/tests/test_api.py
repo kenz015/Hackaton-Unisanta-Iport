@@ -80,3 +80,51 @@ def test_erro_da_ia_nao_vaza_detalhes(monkeypatch):
     monkeypatch.setattr(ia_service, "_gerar_resposta_gemini", explode)
     resposta = ia_service.explicar_alerta("sobrecarga", "x")
     assert "chave-secreta" not in resposta and "Não foi possível" in resposta
+
+
+def test_explicacao_respeita_o_prazo_total(monkeypatch):
+    import time as _t
+    chamadas = []
+
+    def lento(url, json=None, headers=None, timeout=None):
+        chamadas.append(timeout)
+        _t.sleep(1.2)  # simula o Gemini travado
+
+        class R:
+            status_code = 503
+        return R()
+
+    monkeypatch.setattr(ia_service, "api_key", "chave")
+    monkeypatch.setattr(ia_service, "PRAZO_TOTAL_S", 4)
+    monkeypatch.setattr(ia_service.requests, "post", lento)
+    inicio = _t.time()
+    resposta = ia_service.explicar_alerta("sobrecarga", "Ana com 130%")
+    assert _t.time() - inicio < 4.5  # não fica esperando além do prazo
+    assert "Não foi possível" in resposta  # cai no texto padrão
+    assert all(t <= 4 for t in chamadas)  # cada tentativa usa só o tempo que resta
+
+
+def test_modelo_mais_rapido_primeiro():
+    assert ia_service.MODELOS_GEMINI[0] == ia_service.model
+    assert "gemini-flash-lite-latest" in ia_service.MODELOS_GEMINI[:2]
+
+
+def test_gemini_ocupado_tenta_o_proximo_modelo(monkeypatch):
+    status = iter([503, 429, 200])
+    usados = []
+
+    def post(url, json=None, headers=None, timeout=None):
+        usados.append(url.split("/models/")[1].split(":")[0])
+
+        class R:
+            status_code = next(status)
+            text = ""
+
+            def json(self):
+                return {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+        return R()
+
+    monkeypatch.setattr(ia_service, "api_key", "chave")
+    monkeypatch.setattr(ia_service.requests, "post", post)
+    assert ia_service._gerar_resposta_gemini("sobrecarga", "x") == "ok"
+    assert len(set(usados)) == 3  # passou por três modelos diferentes
