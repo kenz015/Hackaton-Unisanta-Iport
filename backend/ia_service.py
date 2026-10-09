@@ -25,9 +25,17 @@ def _load_env_files() -> None:
 
 _load_env_files()
 
-api_key = (os.getenv("AI_API_KEY") or "").strip()
-model = (os.getenv("AI_MODEL") or "gemini-2.0-flash").strip()
+# Aceita a chave pelos dois nomes (o .env do Créu usa GEMINI_API_KEY); ignora valores de exemplo
+api_key = next(
+    (c for c in ((os.getenv(n) or "").strip() for n in ("AI_API_KEY", "GEMINI_API_KEY")) if c and not c.startswith("cole-")),
+    "",
+)
 provider = (os.getenv("AI_PROVIDER") or "gemini").strip().lower()
+model = (os.getenv("AI_MODEL") or "").strip()
+if provider == "gemini" and not model.lower().startswith("gemini"):
+    model = (os.getenv("GEMINI_MODEL") or "gemini-flash-latest").strip()  # AI_MODEL era de outro provedor (ex.: gpt-4o-mini)
+# Se o modelo não existir para a conta (404), tenta estes na ordem
+MODELOS_GEMINI = list(dict.fromkeys([model, "gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest"]))
 
 
 def _normalizar_contexto_azure(contexto):
@@ -83,9 +91,6 @@ def _gerar_resposta_gemini(tipo_problema, descricao, contexto=None):
         "Use linguagem de gestor, explique o problema sem jargão excessivo e mantenha uma explicação mais lenta e completa do que uma resposta curta."
     )
 
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    )
     payload = {
         "contents": [
             {
@@ -96,9 +101,23 @@ def _gerar_resposta_gemini(tipo_problema, descricao, contexto=None):
         "generationConfig": {"temperature": 0.3},
     }
 
-    response = requests.post(url, json=payload, timeout=30)
-    response.raise_for_status()
-    data = response.json()
+    data = None
+    for nome_modelo in MODELOS_GEMINI:
+        # A chave vai no cabeçalho (não na URL), para nunca aparecer em mensagens de erro
+        response = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{nome_modelo}:generateContent",
+            json=payload,
+            headers={"x-goog-api-key": api_key},
+            timeout=30,
+        )
+        if response.status_code == 404:
+            continue  # modelo não disponível para esta conta: tenta o próximo
+        if response.status_code != 200:
+            raise RuntimeError(f"Gemini respondeu HTTP {response.status_code}")
+        data = response.json()
+        break
+    if data is None:
+        raise RuntimeError("Nenhum modelo do Gemini disponível para esta chave.")
 
     candidates = data.get("candidates", [])
     if not candidates:
@@ -145,4 +164,5 @@ def explicar_alerta(tipo_problema, descricao, contexto=None):
         )
         return resposta.choices[0].message.content
     except Exception as exc:
-        return f"Não foi possível gerar a explicação da IA no momento: {exc}. Sugestão prática: revisar responsável, estimativa e bloqueios do item."
+        print(f"[ia] Falha ao gerar explicação: {exc!r}")  # detalhe só no terminal
+        return "Não foi possível gerar a explicação da IA no momento. Sugestão prática: revisar responsável, estimativa e bloqueios do item."

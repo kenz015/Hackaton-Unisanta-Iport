@@ -76,6 +76,12 @@ function azureConfig() {
   return { ok, org, project, team, pat };
 }
 
+/** Cabeçalhos para falar com a API Python. No deploy, leva a senha compartilhada (API_SHARED_SECRET). */
+function backendHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const segredo = env("API_SHARED_SECRET");
+  return { ...extra, ...(segredo ? { "X-ICrew-Key": segredo } : {}) };
+}
+
 function backendUrl() {
   return env("BACKEND_URL") || env("VITE_BACKEND_URL") || "http://127.0.0.1:5000";
 }
@@ -83,7 +89,7 @@ function backendUrl() {
 async function fetchBackendSource(): Promise<Source | null> {
   try {
     const url = `${backendUrl().replace(/\/$/, "")}/api/source`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const res = await fetch(url, { headers: backendHeaders({ Accept: "application/json" }), signal: AbortSignal.timeout(60_000) });
     if (!res.ok) return null;
     const data = (await res.json()) as { workItems?: Array<Record<string, unknown>>; today?: string; currentSprintId?: string; people?: unknown[]; projects?: unknown[]; teams?: unknown[]; sprints?: unknown[]; absences?: unknown[]; holidays?: unknown[]; burnRatio?: Array<number | undefined> };
     if (!Array.isArray(data.workItems)) return null;
@@ -329,8 +335,9 @@ export const explainAlertAI = createServerFn({ method: "POST" })
     try {
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: backendHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(60_000),
       });
       if (!res.ok) return { text: null as string | null };
       const json = (await res.json()) as { resposta?: string; status?: string };

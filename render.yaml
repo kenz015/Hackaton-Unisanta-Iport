@@ -1,0 +1,93 @@
+# Deploy do iCrew no Render (render.com) — 3 serviços gratuitos.
+# No Render: New → Blueprint → escolha este repositório. Ele cria tudo sozinho.
+# Os valores com "sync: false" (chaves secretas) são pedidos no painel na hora de criar.
+#
+# Se o Render der um endereço diferente de https://<nome>.onrender.com para algum serviço
+# (nome já usado por outra pessoa), corrija BACKEND_URL, VITE_CHATBOT_URL e CORS_ORIGINS
+# no painel e clique em "Manual Deploy" no site.
+
+services:
+  # ---------- API de dados (backend/api.py) ----------
+  - type: web
+    name: icrew-unisanta-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python api.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: FLASK_DEBUG
+        value: "false"
+      # Senha que só o site conhece: sem ela, a API recusa os pedidos (exceto /api/health)
+      - key: API_SHARED_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://icrew-unisanta-site.onrender.com
+      - key: ADO_ORG
+        value: gs255041
+      - key: ADO_PROJECT
+        value: iCrew
+      - key: ADO_TEAM
+        value: iCrew Team
+      - key: ADO_PAT
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # ---------- Créu, o chatbot (backend/app.py) ----------
+  - type: web
+    name: icrew-unisanta-creu
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: CHATBOT_PORT=$PORT python app.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: CHATBOT_HOST
+        value: 0.0.0.0
+      - key: FLASK_DEBUG
+        value: "false"
+      - key: CORS_ORIGINS
+        value: https://icrew-unisanta-site.onrender.com
+      - key: ADO_ORG
+        value: gs255041
+      - key: ADO_PROJECT
+        value: iCrew
+      - key: ADO_TEAM
+        value: iCrew Team
+      - key: ADO_PAT
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # ---------- Site (frontend) ----------
+  - type: web
+    name: icrew-unisanta-site
+    runtime: node
+    plan: free
+    rootDir: frontend
+    # node-server: gera um servidor Node comum (o padrão seria Cloudflare)
+    buildCommand: npm ci && NITRO_PRESET=node-server npm run build
+    startCommand: node .output/server/index.mjs
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: BACKEND_URL
+        value: https://icrew-unisanta-api.onrender.com
+      # Lido no build: o navegador fala direto com o Créu
+      - key: VITE_CHATBOT_URL
+        value: https://icrew-unisanta-creu.onrender.com/api/chatbot
+      - key: API_SHARED_SECRET
+        fromService:
+          type: web
+          name: icrew-unisanta-api
+          envVarKey: API_SHARED_SECRET

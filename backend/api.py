@@ -1,3 +1,4 @@
+import hmac
 import os
 
 from flask import Flask, jsonify, request
@@ -20,6 +21,22 @@ def erro_interno(contexto: str, exc: Exception):
     """Registra o detalhe no terminal e devolve uma mensagem genérica (sem dados internos)."""
     print(f"[api] {contexto}: {exc!r}")
     return jsonify({"status": "erro", "mensagem": f"{contexto}. Veja o terminal do backend para detalhes."}), 500
+
+
+@app.before_request
+def exigir_senha_compartilhada():
+    """
+    No deploy, a API fica na internet: só o servidor do site (que já confere o login)
+    pode chamá-la, mandando a senha API_SHARED_SECRET no cabeçalho X-ICrew-Key.
+    Sem API_SHARED_SECRET configurada (uso local), nada muda.
+    """
+    segredo = (os.getenv("API_SHARED_SECRET") or "").strip()
+    if not segredo or request.method == "OPTIONS" or request.path == "/api/health":
+        return None
+    enviado = request.headers.get("X-ICrew-Key", "")
+    if not hmac.compare_digest(enviado.encode(), segredo.encode()):
+        return jsonify({"status": "erro", "mensagem": "Acesso negado."}), 401
+    return None
 
 
 @app.get("/api/health")

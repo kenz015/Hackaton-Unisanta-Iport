@@ -256,6 +256,12 @@ def gerar_resposta(conversa, instrucoes):
     raise FalhaIA(503, MENSAGEM_IA_OCUPADA) if teve_sobrecarga else FalhaIA(502, MENSAGEM_IA_INDISPONIVEL)
 
 
+@app.get('/api/health')
+def saude():
+    """Para o "despertador" (UptimeRobot) e para o Render saberem que o Créu está no ar. Não expõe dados."""
+    return jsonify({'status': 'ok', 'service': 'creu'})
+
+
 @app.route('/api/chatbot', methods=['POST'])
 def falar_com_creu():
     dados = request.get_json(silent=True)

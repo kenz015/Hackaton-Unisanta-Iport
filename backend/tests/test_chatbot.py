@@ -206,3 +206,8 @@ def test_token_do_cabecalho():
     assert token_da_requisicao(Req({"Authorization": "Basic xyz"})) is None
     assert token_da_requisicao(Req({"Authorization": "Bearer curto"})) is None
     assert token_da_requisicao(Req({})) is None
+
+
+def test_rota_de_saude_do_creu():
+    r = creu.app.test_client().get("/api/health")
+    assert r.status_code == 200 and r.get_json()["status"] == "ok"
