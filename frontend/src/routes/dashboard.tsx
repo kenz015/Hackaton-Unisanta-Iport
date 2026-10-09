@@ -40,7 +40,9 @@ function Dashboard() {
   const cfg = data.config;
   const { projects, workItems } = data;
   const list = filterPeople(data.people, filters, workItems);
-  const filteredWorkItems = filterItems(workItems, filters, data.people);
+  // data.people traz { person, current, weeks }; os filtros precisam da pessoa em si
+  const peopleList = data.people.map((pc) => pc.person);
+  const filteredWorkItems = filterItems(workItems, filters, peopleList);
   const nWeeks = Number(filters.period);
   const withCap = list.filter((p) => p.current.capacity > 0);
   const avgUtil = withCap.length ? withCap.reduce((s, p) => s + p.current.load, 0) / withCap.reduce((s, p) => s + p.current.capacity, 0) : 0;
@@ -100,7 +102,7 @@ function Dashboard() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all" className="text-xs">Todas as pessoas</SelectItem>
-            {data.people.map((person) => (
+            {[...peopleList].sort((a, b) => a.name.localeCompare(b.name, "pt-BR")).map((person) => (
               <SelectItem key={person.id} value={person.id} className="text-xs">{person.name}</SelectItem>
             ))}
           </SelectContent>

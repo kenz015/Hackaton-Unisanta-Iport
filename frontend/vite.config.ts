@@ -1,20 +1,24 @@
-// @lovable.dev/vite-tanstack-config already includes the following — do NOT add them manually
-// or the app will break with duplicate plugins:
-//   - TanStack devtools (dev-only, first), tanstackStart, viteReact, tailwindcss, tsConfigPaths,
-//     nitro (build-only using cloudflare as a default target), VITE_* env injection, @ path alias,
-//     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
-// You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+const env = process.env as Record<string, string | undefined>;
+
 export default defineConfig({
-  server: {
-    watch: {
-      ignored: ["**/.output/**", "**/.nitro/**", "**/.wrangler/**"],
+  vite: {
+    server: {
+      host: true,
+      // 8080 é o endereço cadastrado no Supabase (links de confirmação e de nova senha).
+      port: 8080,
+      strictPort: true,
+      proxy: {
+        // Chatbot Créu (backend/app.py). Única rota do backend liberada para o navegador;
+        // o app.py exige o token de login em cada mensagem.
+        "/api/chatbot": {
+          target: env["CHATBOT_BACKEND_URL"] || "http://127.0.0.1:5001",
+          changeOrigin: true,
+        },
+        // As outras rotas da API (backend/api.py) NÃO passam por aqui de propósito:
+        // o próprio servidor do site fala com elas, e o navegador nunca acessa direto.
+      },
     },
-  },
-  tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
-    server: { entry: "server" },
   },
 });

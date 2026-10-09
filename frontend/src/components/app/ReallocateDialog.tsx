@@ -9,6 +9,7 @@ import { useSnapshot } from "@/services/api";
 import { applyOverrides, buildSnapshot, peakFor, type Item } from "@/services/capacity";
 import { defaultConfig } from "@/services/config";
 import { reassignWorkItem } from "@/services/azure-fns";
+import { getAccessToken } from "@/integrations/supabase";
 import { useAppState } from "./app-state";
 import { UtilizationBadge } from "./status";
 import { WorkItemTypeBadge } from "./WorkItemTypeBadge";
@@ -74,8 +75,10 @@ export function ReallocateDialog({ item, open, onOpenChange }: { item: Item | nu
     if (source?.origin === "azure") {
       setSaving(true);
       try {
-        const toEmail = toId ? toId : null;
-        await reassignWorkItem({ data: { id: item.id, assignee: toEmail } });
+        // O Azure grava o responsável pelo e-mail; o id da pessoa pode ser o GUID do Azure
+        const toPerson = toId ? data.people.find((p) => p.person.id === toId)?.person : undefined;
+        const toEmail = toId ? (toPerson?.email || toId) : null;
+        await reassignWorkItem({ data: { id: item.id, assignee: toEmail, accessToken: await getAccessToken() } });
         toast.success(`${label} (gravado no Azure DevOps)`);
       } catch (e) {
         toast.error(`Aplicado no painel, mas não gravou no Azure: ${e instanceof Error ? e.message : "erro"}`);

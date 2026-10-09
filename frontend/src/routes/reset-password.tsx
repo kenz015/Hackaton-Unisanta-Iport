@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth/auth-provider";
+import { PasswordChecklist } from "@/components/auth/PasswordChecklist";
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({ meta: [{ title: "Nova senha · iCrew" }] }),
@@ -48,11 +49,12 @@ function ResetPassword() {
             {error && <div role="alert" className="rounded-lg bg-critical-soft px-3 py-2 text-sm text-critical">{error}</div>}
             <div className="space-y-1.5">
               <Label htmlFor="np">Nova senha</Label>
-              <Input id="np" type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-11" />
+              <Input id="np" type="password" required autoComplete="new-password" aria-describedby="new-password-rules" value={password} onChange={(e) => setPassword(e.target.value)} className="h-11" />
+              <PasswordChecklist password={password} id="new-password-rules" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="cp">Confirme a senha</Label>
-              <Input id="cp" type="password" required minLength={8} autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="h-11" />
+              <Input id="cp" type="password" required autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="h-11" />
             </div>
             <Button type="submit" className="h-11 w-full rounded-lg" disabled={busy}>
               {busy && <Loader2 className="size-4 animate-spin" />} Salvar e entrar <ArrowRight className="ml-auto size-4" />

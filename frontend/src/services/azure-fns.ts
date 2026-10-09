@@ -16,8 +16,38 @@ import { addDays, format, parseISO } from "date-fns";
 import type { Absence, Holiday, Person, Project, Sprint, Team } from "@/data/types";
 import { DEFAULT_HOLIDAYS, mapAgileState, type WorkItemType } from "@/data/agile";
 import type { Item, Source } from "@/services/capacity";
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/integrations/supabase";
 
 const API = "api-version=7.1";
+
+/* ------------------------------------------------------------------ */
+/* Segurança: só quem está logado no iCrew pode usar estas funções.    */
+/* O navegador manda o token da sessão e o servidor confere no Supabase. */
+/* ------------------------------------------------------------------ */
+const tokensValidos = new Map<string, number>(); // token -> válido até (ms)
+const CACHE_TOKEN_MS = 60_000;
+
+async function exigirLogin(token: unknown): Promise<void> {
+  if (typeof token !== "string" || token.length < 20 || token.length > 4096) throw new Error("Sessão expirada. Entre de novo no iCrew.");
+  const agora = Date.now();
+  if ((tokensValidos.get(token) ?? 0) > agora) return;
+  let ok = false;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(8_000),
+    });
+    ok = res.ok;
+  } catch {
+    throw new Error("Não foi possível validar o login agora. Verifique a internet.");
+  }
+  if (!ok) throw new Error("Sessão expirada. Entre de novo no iCrew.");
+  if (tokensValidos.size > 500) tokensValidos.clear();
+  tokensValidos.set(token, agora + CACHE_TOKEN_MS);
+}
+
+const texto = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : undefined);
+const tokenDe = (d: unknown) => (d && typeof d === "object" ? (d as Record<string, unknown>)["accessToken"] : undefined);
 /**
  * Lê os arquivos .env do frontend e do backend para manter a configuração local
  * funcionando após a reorganização do projeto. Variáveis já definidas não são trocadas.
@@ -109,7 +139,10 @@ interface AdoIteration { id: string; name: string; path: string; attributes: { s
 interface AdoMember { teamMember: { id: string; displayName: string; uniqueName: string }; activities: { capacityPerDay: number; name: string | null }[]; daysOff: { start: string; end: string }[] }
 
 /** Busca work items, sprints, capacidade e folgas no Azure e devolve no formato das telas. */
-export const getAzureSource = createServerFn({ method: "GET" }).handler(async (): Promise<Source | null> => {
+export const getAzureSource = createServerFn({ method: "GET" })
+  .inputValidator((d: { accessToken: string | null }) => ({ accessToken: tokenDe(d) }))
+  .handler(async ({ data }): Promise<Source | null> => {
+  await exigirLogin(data.accessToken);
   const backend = await fetchBackendSource();
   if (backend) return backend;
 
@@ -243,8 +276,18 @@ export const getAzureSource = createServerFn({ method: "GET" }).handler(async ()
 
 /** Muda o responsável de um work item no Azure (ou só valida, com validateOnly). */
 export const reassignWorkItem = createServerFn({ method: "POST" })
-  .inputValidator((d: { id: number; assignee: string | null; validateOnly?: boolean }) => d)
+  .inputValidator((d: { id: number; assignee: string | null; validateOnly?: boolean; accessToken: string | null }) => {
+    const x = (d ?? {}) as Record<string, unknown>;
+    const id = Number(x["id"]);
+    if (!Number.isInteger(id) || id <= 0 || id > 2_147_483_647) throw new Error("Número do item inválido.");
+    const assignee = x["assignee"];
+    if (assignee !== null && (typeof assignee !== "string" || assignee.length > 254 || !/^[^\s@<>"]+@[^\s@<>"]+$/.test(assignee))) {
+      throw new Error("Responsável inválido: use o e-mail da pessoa no Azure DevOps.");
+    }
+    return { id, assignee: assignee as string | null, validateOnly: x["validateOnly"] === true, accessToken: x["accessToken"] };
+  })
   .handler(async ({ data }) => {
+    await exigirLogin(data.accessToken);
     const c = azureConfig();
     if (!c.ok) throw new Error("Azure DevOps não configurado no .env");
     const body = [{ op: "add", path: "/fields/System.AssignedTo", value: data.assignee ?? "" }];
@@ -258,8 +301,21 @@ export const reassignWorkItem = createServerFn({ method: "POST" })
 
 /** Pede à IA uma explicação executiva do aviso usando o backend, que já conhece o contexto do Azure. */
 export const explainAlertAI = createServerFn({ method: "POST" })
-  .inputValidator((d: { title?: string; description?: string; action?: string; why?: string; type?: string; item_id?: number }) => d)
+  .inputValidator((d: { title?: string | undefined; description?: string | undefined; action?: string | undefined; why?: string | undefined; type?: string | undefined; item_id?: number | undefined; accessToken: string | null }) => {
+    const x = (d ?? {}) as Record<string, unknown>;
+    const id = Number(x["item_id"]);
+    return {
+      title: texto(x["title"], 300),
+      description: texto(x["description"], 2000),
+      action: texto(x["action"], 1000),
+      why: texto(x["why"], 2000),
+      type: texto(x["type"], 100),
+      item_id: Number.isInteger(id) && id > 0 ? id : undefined,
+      accessToken: x["accessToken"],
+    };
+  })
   .handler(async ({ data }) => {
+    await exigirLogin(data.accessToken);
     const url = `${backendUrl().replace(/\/$/, "")}/api/ai/explain`;
     const body = {
       type: data.type ?? "alerta de processo",

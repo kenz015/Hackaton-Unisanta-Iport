@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BriefcaseBusiness, CalendarClock, CircleDashed, RotateCcw, UserRound } from "lucide-react";
+import { BriefcaseBusiness, CalendarClock, CircleDashed, Plane, RotateCcw, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader, PageSkeleton } from "@/components/app/ui-bits";
 import { WorkItemTypeBadge } from "@/components/app/WorkItemTypeBadge";
+import { UtilizationBadge } from "@/components/app/status";
 import { useAppState } from "@/components/app/app-state";
 import { useSnapshot } from "@/services/api";
 
@@ -21,24 +22,36 @@ export const Route = createFileRoute("/pessoas")({
   component: Pessoas,
 });
 
+/** "2026-10-12" -> "12/10" */
+const dataCurta = (iso?: string | null) => {
+  const [, m, d] = (iso ?? "").split("-");
+  return d && m ? `${d}/${m}` : (iso ?? "");
+};
+
 function Pessoas() {
   const { data, isLoading } = useSnapshot();
   const { filters, setFilter, resetFilters } = useAppState();
 
   if (isLoading || !data) return <PageSkeleton />;
 
-  const filteredPeople = data.people.filter((person) => {
-    if (filters.team !== "all" && person.teamId !== filters.team) return false;
-    if (filters.person !== "all" && person.id !== filters.person) return false;
-    return true;
-  });
+  // data.people traz { person, current, weeks, nextAbsence }: os dados da pessoa ficam em "person"
+  const filteredPeople = data.people
+    .filter(({ person }) => {
+      if (filters.team !== "all" && person.teamId !== filters.team) return false;
+      if (filters.person !== "all" && person.id !== filters.person) return false;
+      return true;
+    })
+    .sort((a, b) => a.person.name.localeCompare(b.person.name, "pt-BR"));
 
-  const peopleWithTasks = filteredPeople.map((person) => {
+  const peopleWithTasks = filteredPeople.map(({ person, current, nextAbsence }) => {
     const tasks = data.workItems.filter((item) => item.assigneeId === person.id && (filters.project === "all" || item.projectId === filters.project) && (filters.type === "all" || item.type === filters.type));
     const openTasks = tasks.filter((item) => item.state !== "Concluído");
-    const totalHours = tasks.reduce((sum, item) => sum + (item.estimateHours ?? 0), 0);
+    // Mesma regra do resto do iCrew: só Task e Bug abertas contam horas
+    const totalHours = Math.round(
+      openTasks.filter((item) => item.type === "Task" || item.type === "Bug").reduce((sum, item) => sum + (item.remainingHours ?? item.estimateHours ?? 0), 0) * 10,
+    ) / 10;
 
-    return { person, tasks, openTasks, totalHours };
+    return { person, current, nextAbsence, tasks, openTasks, totalHours };
   });
 
   return (
@@ -76,7 +89,7 @@ function Pessoas() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all" className="text-xs">Todas as pessoas</SelectItem>
-            {data.people.map((person) => (
+            {[...data.people].map(({ person }) => person).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")).map((person) => (
               <SelectItem key={person.id} value={person.id} className="text-xs">{person.name}</SelectItem>
             ))}
           </SelectContent>
@@ -103,8 +116,8 @@ function Pessoas() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {peopleWithTasks.map(({ person, tasks, openTasks, totalHours }) => {
-          const initials = person.name
+        {peopleWithTasks.map(({ person, current, nextAbsence, tasks, openTasks, totalHours }) => {
+          const initials = (person.name ?? "")
             .split(" ")
             .filter(Boolean)
             .slice(0, 2)
@@ -114,34 +127,47 @@ function Pessoas() {
           return (
             <article key={person.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                  {initials}
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                  {initials || "?"}
                 </div>
-                <div>
-                  <h2 className="text-base font-semibold text-foreground">{person.name}</h2>
-                  <p className="text-xs text-muted-foreground">{person.role}</p>
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-base font-semibold text-foreground">{person.name || person.id}</h2>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {person.role}
+                    {person.dedication < 1 && ` · ${Math.round(person.dedication * 100)}% de dedicação`}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <UtilizationBadge util={current.utilization} status={current.status} />
+                  <span className="text-[10px] text-muted-foreground">nesta semana</span>
                 </div>
               </div>
+              {nextAbsence && (
+                <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">
+                  <Plane className="size-3" aria-hidden />
+                  {nextAbsence.start === nextAbsence.end ? `${nextAbsence.type} em ${dataCurta(nextAbsence.start)}` : `${nextAbsence.type} de ${dataCurta(nextAbsence.start)} a ${dataCurta(nextAbsence.end)}`}
+                </p>
+              )}
 
               <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
                 <div className="rounded-xl border border-border bg-muted/40 p-2">
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <UserRound className="size-3.5" aria-hidden />
-                    <span>Aberta</span>
+                    <span>Abertas</span>
                   </div>
                   <div className="mt-2 text-base font-bold text-foreground">{openTasks.length}</div>
                 </div>
                 <div className="rounded-xl border border-border bg-muted/40 p-2">
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <BriefcaseBusiness className="size-3.5" aria-hidden />
-                    <span>Horas</span>
+                    <span>Horas abertas</span>
                   </div>
                   <div className="mt-2 text-base font-bold text-foreground">{totalHours}h</div>
                 </div>
                 <div className="rounded-xl border border-border bg-muted/40 p-2">
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <CalendarClock className="size-3.5" aria-hidden />
-                    <span>Tasks</span>
+                    <span>Itens</span>
                   </div>
                   <div className="mt-2 text-base font-bold text-foreground">{tasks.length}</div>
                 </div>
@@ -172,7 +198,7 @@ function Pessoas() {
 
                         <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
                           <span>{task.estimateHours ?? 0}h estimadas</span>
-                          <span>{task.start} → {task.end}</span>
+                          <span>{dataCurta(task.start)} → {dataCurta(task.end)}</span>
                         </div>
                       </li>
                     ))}

@@ -78,8 +78,8 @@ def _gerar_resposta_gemini(tipo_problema, descricao, contexto=None):
         "Responda como se estivesse explicando o caso para uma liderança executiva, de forma clara, objetiva e didática. "
         f"Tipo do alerta: {tipo_problema}. "
         f"Detalhes do caso: {descricao}. "
-        f"Contexto do item do Azure DevOps: {contexto_texto} " if contexto_texto else ""
-        "Estrutura a resposta em 5 partes: 1) Resumo executivo; 2) Causa provável; 3) Impacto no time e na entrega; 4) Risco e prioridade; 5) Recomendação prática e imediata. "
+        + (f"Contexto do item do Azure DevOps: {contexto_texto} " if contexto_texto else "")
+        + "Estrutura a resposta em 5 partes: 1) Resumo executivo; 2) Causa provável; 3) Impacto no time e na entrega; 4) Risco e prioridade; 5) Recomendação prática e imediata. "
         "Use linguagem de gestor, explique o problema sem jargão excessivo e mantenha uma explicação mais lenta e completa do que uma resposta curta."
     )
 
@@ -133,7 +133,7 @@ def explicar_alerta(tipo_problema, descricao, contexto=None):
             f"Explique este problema de processo ágil e dê uma sugestão prática. "
             f"Tipo do alerta: {tipo_problema}. "
             f"Detalhes: {descricao}. "
-            f"Contexto do item: {contexto} " if contexto else ""
+            + (f"Contexto do item: {contexto} " if contexto else "")
         )
         resposta = client.chat.completions.create(
             model=model,

@@ -6,13 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth/auth-provider";
 import portImage from "@/assets/port-terminal.jpg";
+import { MIN_PASSWORD_LENGTH } from "@/lib/password-rules";
+import { PasswordChecklist } from "@/components/auth/PasswordChecklist";
 
 type Mode = "login" | "signup" | "forgot";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (search: Record<string, unknown>): { redirect?: string | undefined } => {
     const r = search["redirect"];
-    return { redirect: typeof r === "string" && r.startsWith("/") && !r.startsWith("//") ? r : undefined };
+    // Só caminhos internos ("/dashboard"); bloqueia "//site.com" e "/\\site.com", que levariam para fora do iCrew
+    return { redirect: typeof r === "string" && r.startsWith("/") && !r.startsWith("//") && !r.includes("\\") ? r : undefined };
   },
   head: () => ({
     meta: [
@@ -24,7 +27,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const { user, ready, configured, demoMode, signIn, signUp, sendReset, enterDemo } = useAuth();
+  const { user, ready, configured, demoMode, recovering, callbackError, clearCallbackError, signIn, signUp, sendReset, enterDemo } = useAuth();
   const { redirect } = Route.useSearch();
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("login");
@@ -34,10 +37,15 @@ function AuthPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
-  // Já logado? Vai direto para o sistema.
+  // Já logado? Vai direto para o sistema (exceto quem veio trocar a senha).
   useEffect(() => {
-    if (ready && user) void navigate({ to: redirect ?? "/dashboard", replace: true });
-  }, [ready, user, redirect, navigate]);
+    if (ready && user && !recovering) void navigate({ to: redirect ?? "/dashboard", replace: true });
+  }, [ready, user, recovering, redirect, navigate]);
+
+  // Erro que veio no link do e-mail (ex.: link expirado): mostra uma vez.
+  useEffect(() => {
+    if (callbackError) { setError(callbackError); clearCallbackError(); }
+  }, [callbackError, clearCallbackError]);
 
   const change = (m: Mode) => { setMode(m); setError(""); setInfo(""); setPassword(""); };
 
@@ -69,7 +77,7 @@ function AuthPage() {
   const title = { login: "Entre na sua conta.", signup: "Crie sua conta.", forgot: "Recupere seu acesso." }[mode];
   const subtitle = {
     login: "Um horizonte mais claro para as entregas da sua equipe.",
-    signup: "Use seu e-mail de trabalho. A senha precisa ter pelo menos 8 caracteres.",
+    signup: "Use seu e-mail de trabalho e crie uma senha forte.",
     forgot: "Enviaremos um link para você criar uma nova senha.",
   }[mode];
 
@@ -127,8 +135,8 @@ function AuthPage() {
                     type="password"
                     autoComplete={mode === "signup" ? "new-password" : "current-password"}
                     required
-                    minLength={mode === "signup" ? 8 : 1}
-                    placeholder={mode === "signup" ? "No mínimo 8 caracteres" : "Sua senha"}
+                    placeholder={mode === "signup" ? `No mínimo ${MIN_PASSWORD_LENGTH} caracteres` : "Sua senha"}
+                    aria-describedby={mode === "signup" ? "password-rules" : undefined}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11"
@@ -136,6 +144,7 @@ function AuthPage() {
                     autoCorrect="off"
                     autoCapitalize="none"
                   />
+                  {mode === "signup" && <PasswordChecklist password={password} />}
                 </div>
               )}
               <Button type="submit" className="h-11 w-full rounded-lg" disabled={busy || !ready}>

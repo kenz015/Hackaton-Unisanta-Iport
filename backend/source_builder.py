@@ -6,7 +6,8 @@ O front calcula utilização, heatmap, timeline e avisos a partir de:
 
 Regras importantes (o front depende delas):
   - Datas sempre no formato "yyyy-MM-dd" (sem hora).
-  - assigneeId e person.id são o e-mail (uniqueName) em minúsculas, para baterem entre si.
+  - person.id e workItems[].assigneeId são o GUID do Azure DevOps (estável).
+  - person.email guarda o uniqueName em minúsculas, quando disponível.
   - state já traduzido para o padrão do front: Novo, Ativo, Em revisão, Bloqueado, Concluído.
   - Toda pessoa que tem tarefa atribuída aparece em people, mesmo sem capacidade cadastrada.
 """
@@ -69,10 +70,18 @@ def somar_dias_uteis(inicio: date, dias: int) -> date:
 def _pessoa_de(identidade: dict | None):
     if not isinstance(identidade, dict):
         return None
-    unique = (identidade.get("uniqueName") or "").strip().lower()
-    if not unique:
+    guid = (identidade.get("id") or "").strip()
+    email = (identidade.get("uniqueName") or "").strip().lower() or None
+    nome = (
+        identidade.get("displayName")
+        or (email.split("@")[0] if email else None)
+        or (guid[:8] if guid else None)
+        or "Sem nome"
+    )
+    chave = guid or email
+    if not chave:
         return None
-    return unique, (identidade.get("displayName") or unique.split("@")[0])
+    return chave, nome, email
 
 
 def montar_source(client) -> dict:
@@ -103,13 +112,14 @@ def montar_source(client) -> dict:
             info = _pessoa_de(membro.get("teamMember"))
             if not info:
                 continue
-            pid, nome = info
+            pid, nome, email = info
             atividades = membro.get("activities") or []
             horas_dia = sum((a.get("capacityPerDay") or 0) for a in atividades)
             if pid not in pessoas or (atual and s["id"] == atual["id"]):
                 pessoas[pid] = {
                     "id": pid,
-                    "name": nome,
+                    "email": email,
+                    "name": nome or "Sem nome",
                     "role": next((a.get("name") for a in atividades if a.get("name")), None) or "Desenvolvimento",
                     "teamId": time_nome,
                     "dedication": min(1, horas_dia / HORAS_POR_DIA) if horas_dia > 0 else 1,
@@ -123,8 +133,15 @@ def montar_source(client) -> dict:
     for membro in client.buscar_membros_do_time():
         info = _pessoa_de(membro.get("identity"))
         if info and info[0] not in pessoas:
-            pid, nome = info
-            pessoas[pid] = {"id": pid, "name": nome, "role": "Desenvolvimento", "teamId": time_nome, "dedication": 1}
+            pid, nome, email = info
+            pessoas[pid] = {
+                "id": pid,
+                "email": email,
+                "name": nome,
+                "role": "Desenvolvimento",
+                "teamId": time_nome,
+                "dedication": 1,
+            }
 
     # 4) Work items
     ids = client.buscar_ids_sprint_atual()
@@ -138,7 +155,15 @@ def montar_source(client) -> dict:
         info = _pessoa_de(f.get("System.AssignedTo"))
         assignee = info[0] if info else None
         if info and assignee not in pessoas:  # tem tarefa mas não está no time: entra mesmo assim
-            pessoas[assignee] = {"id": assignee, "name": info[1], "role": "Desenvolvimento", "teamId": time_nome, "dedication": 1}
+            pid, nome, email = info
+            pessoas[pid] = {
+                "id": pid,
+                "email": email,
+                "name": nome,
+                "role": "Desenvolvimento",
+                "teamId": time_nome,
+                "dedication": 1,
+            }
 
         projeto = (f.get("System.AreaPath") or client.project).split("\\")[-1]
         if projeto not in projetos:

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { getAzureSource } from "@/services/azure-fns";
+import { getAccessToken } from "@/integrations/supabase";
 import { useAppState } from "@/components/app/app-state";
 import { applyOverrides, buildSnapshot, mockSource, type Source } from "./capacity";
 import { defaultConfig } from "./config";
@@ -17,7 +18,7 @@ export interface SourceResult {
  */
 export async function fetchSource(): Promise<SourceResult> {
   try {
-    const azure = await getAzureSource();
+    const azure = await getAzureSource({ data: { accessToken: await getAccessToken() } });
     if (azure) return { source: azure };
     return { source: mockSource };
   } catch (e) {

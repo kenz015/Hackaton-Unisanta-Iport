@@ -7,6 +7,8 @@ export interface Person {
   role: string;
   teamId: string;
   dedication: number; // 0..1
+  /** E-mail (uniqueName) no Azure DevOps; usado para gravar o responsável. O id pode ser o GUID. */
+  email?: string | null;
 }
 
 export interface Team {

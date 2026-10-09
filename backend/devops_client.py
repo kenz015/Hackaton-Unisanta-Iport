@@ -27,6 +27,9 @@ def _load_env_files() -> None:
 _load_env_files()
 
 
+# Tempo máximo esperando o Azure responder (evita o servidor travar se a rede cair)
+TIMEOUT_S = 30
+
 class AzureDevOpsClient:
     def __init__(self):
         self.org = (os.getenv("ADO_ORG") or "").strip()
@@ -49,16 +52,19 @@ class AzureDevOpsClient:
         return f"{self.base_url}/{path.lstrip('/')}"
 
     def _get(self, path: str, **kwargs):
+        kwargs.setdefault("timeout", TIMEOUT_S)
         response = requests.get(self._url(path), auth=self.auth, **kwargs)
         response.raise_for_status()
         return response.json()
 
     def _post(self, path: str, json=None, **kwargs):
+        kwargs.setdefault("timeout", TIMEOUT_S)
         response = requests.post(self._url(path), json=json, auth=self.auth, **kwargs)
         response.raise_for_status()
         return response.json()
 
     def _patch(self, path: str, payload, **kwargs):
+        kwargs.setdefault("timeout", TIMEOUT_S)
         response = requests.patch(self._url(path), json=payload, auth=self.auth, **kwargs)
         response.raise_for_status()
         return response.json()
@@ -68,7 +74,7 @@ class AzureDevOpsClient:
     def _team_url(self, path: str) -> str:
         """URL de recursos do time: dev.azure.com/{org}/{project}/{team}/_apis/..."""
         return (
-            f"https://dev.azure.com/{quote(self.org)}/{quote(self.project)}/{quote(self.team)}/_apis/"
+            f"https://dev.azure.com/{quote(self.org)}/{quote(self.team)}/{quote(self.project)}/_apis/"
             f"{path.lstrip('/')}"
         )
 
@@ -103,7 +109,7 @@ class AzureDevOpsClient:
     def buscar_membros_do_time(self):
         """Membros do time (para quem não tem capacidade cadastrada)."""
         url = (
-            f"https://dev.azure.com/{quote(self.org)}/_apis/projects/{quote(self.project)}"
+            f"https://dev.azure.com/{quote(self.org)}/{quote(self.team)}/_apis/projects"
             f"/teams/{quote(self.team)}/members?{self.api_version}"
         )
         try:
@@ -148,6 +154,7 @@ class AzureDevOpsClient:
             json=corpo,
             auth=self.auth,
             headers={"Content-Type": "application/json-patch+json"},
+            timeout=TIMEOUT_S,
         )
 
         if response.status_code not in (200, 204):

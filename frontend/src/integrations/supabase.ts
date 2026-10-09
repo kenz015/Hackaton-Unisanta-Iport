@@ -1,24 +1,33 @@
 /**
  * Cliente do Supabase (login). Roda só no navegador.
  *
- * Em desenvolvimento, permite um modo de demonstração local quando não há
- * configuração real do Supabase no ambiente. Em produção, o projeto deve usar
- * apenas os valores do ambiente correto.
+ * O login real (e-mail + senha) fica SEMPRE ligado: se o .env não tiver
+ * VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY, usamos os valores
+ * públicos do projeto iCrew abaixo. Assim ninguém entra sem senha só porque
+ * esqueceu de criar o .env.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const appEnvironment = ((import.meta.env['VITE_APP_ENV'] as string | undefined)?.trim() || import.meta.env.MODE || "development").toLowerCase();
-const allowDemoMode = appEnvironment !== "production";
+/**
+ * Valores PÚBLICOS do projeto Supabase (Lovable Cloud) do iCrew.
+ * A "publishable key" é feita para ficar no navegador — não é segredo.
+ * Para apontar para outro projeto, defina as variáveis no .env.
+ */
+const DEFAULT_SUPABASE_URL = "https://sapugrjzkiuglcyfhkwq.supabase.co";
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_jHnUinmhJH982AKRFRMYcA_GImiXvUg";
 
 const envSupabaseUrl = (import.meta.env['VITE_SUPABASE_URL'] as string | undefined)?.trim();
 const envSupabaseKey = (import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] as string | undefined)?.trim();
 
-const explicitSupabaseConfig = !!envSupabaseUrl && !!envSupabaseKey;
-export const supabaseConfigured = explicitSupabaseConfig;
-export const demoAuthAllowed = allowDemoMode && !supabaseConfigured;
+const url = envSupabaseUrl || DEFAULT_SUPABASE_URL;
+const key = envSupabaseKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
-const url = envSupabaseUrl?.trim() || "";
-const key = envSupabaseKey?.trim() || "";
+export const supabaseConfigured = !!url && !!key;
+/** Endereço e chave pública do Supabase (usados também no servidor para validar o login). */
+export const SUPABASE_URL = url.replace(/\/$/, "");
+export const SUPABASE_PUBLISHABLE_KEY = key;
+/** Modo demonstração (entrar sem senha) desligado: o acesso é só com login real. */
+export const demoAuthAllowed = false;
 
 /** Chaves novas do Supabase (sb_publishable_...) não são JWT: vão só no header apikey. */
 function supabaseFetch(apiKey: string): typeof fetch {
@@ -48,4 +57,19 @@ export function getSupabase(): SupabaseClient | null {
     },
   });
   return client;
+}
+
+/**
+ * Token de acesso da sessão atual (ou null se ninguém estiver logado).
+ * Vai junto nas chamadas ao servidor, que confere no Supabase se o login é válido.
+ */
+export async function getAccessToken(): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  try {
+    const { data } = await sb.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
 }

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import type { Alert } from "@/services/capacity";
 import { useSnapshot } from "@/services/api";
 import { explainAlertAI } from "@/services/azure-fns";
+import { getAccessToken } from "@/integrations/supabase";
 import { SeverityBadge, severityMeta } from "./status";
 import { useAppState } from "./app-state";
 import { ReallocateDialog } from "./ReallocateDialog";
@@ -62,6 +63,7 @@ export function AlertCard({ alert, compact }: { alert: Alert; compact?: boolean 
           why: explain[alert.type],
           type: alert.type,
           item_id: alert.itemIds?.[0],
+          accessToken: await getAccessToken(),
         },
       });
       if (res.text) {

@@ -204,13 +204,14 @@ describe("App routing", () => {
     expect(filterItems(items as any, { project: "all", team: "all", sprint: "all", period: "8", person: "p2", type: "Task" }, people).map((w) => w.id)).toEqual([2]);
   });
 
-  it("uses demo mode when Supabase is not explicitly configured", async () => {
+  it("keeps real login on (no demo auto-login) even without .env", async () => {
     vi.stubEnv("VITE_SUPABASE_URL", "");
     vi.stubEnv("VITE_SUPABASE_PUBLISHABLE_KEY", "");
+    vi.resetModules();
 
     const supabaseModule = await import("@/integrations/supabase");
 
-    expect(supabaseModule.supabaseConfigured).toBe(false);
-    expect(supabaseModule.demoAuthAllowed).toBe(true);
+    expect(supabaseModule.supabaseConfigured).toBe(true);
+    expect(supabaseModule.demoAuthAllowed).toBe(false);
   });
 });
